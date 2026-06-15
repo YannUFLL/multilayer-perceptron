@@ -15,7 +15,17 @@ class Layers:
     def initialize(self, prev_layer_size):
         if self.weight_initializer == "heUniform":
             limit = np.sqrt(6 / prev_layer_size)
-            np.random.uniform(-limit, +limit)
+            self.weights = np.random.uniform(-limit, +limit, size=(prev_layer_size, self.layer_size))
+
+    def compute_z(self, X):
+        output = np.dot(X, self.weights)
+        if self.activation == "sigmoid":
+            output = 1 / (1 + np.exp(-output))
+        if self.activation == "relu":
+            output = np.max(0, output)
+        if self.activation == "softmax":
+            output = np.exp(output) / np.sum(np.exp(output), axis=1, keepdims=True)
+        return (output)
 
     def __len__(self):
         return self.layer_size
@@ -32,13 +42,26 @@ class Model:
         self.y_train = data_train[1]
         self.X_val = data_val[0]
         self.y_val = data_val[1]
+        self.X_train = np.hstack([np.ones((self.X_train.shape[0], 1)), self.X_train])
         self._initalize_weights()
+        z = self._forward_propagation()
+        self._backward_propagation(z)
 
     def _initalize_weights(self):
         prev_layer_size = len(self.X_train)
         for layer in self.network:
             layer.initialize(prev_layer_size)
             prev_layer_size = len(layer)
+
+    def _forward_propagation(self):
+        for i in range(network):
+            z = self.network[i].compute_z(z)
+        return (z)
+        
+
+    def _backward_propagation(self, z):
+        delta = -np.sum(self.y_train * np.log(z))
+        pass
 
 
 def extract_data(path):
