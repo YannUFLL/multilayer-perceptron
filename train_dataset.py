@@ -7,37 +7,45 @@ class Layers:
         self.layer_size = layer_size
         self.activation = activation               
         self.weight_initializer = weight_initializer
-        if self.activation != "sigmoid":
-            raise NotImplementedError()
         if self.weight_initializer != "heUniform":
             raise NotImplementedError()
 
     def initialize(self, prev_layer_size):
         if self.weight_initializer == "heUniform":
             limit = np.sqrt(6 / prev_layer_size)
-        # column : neurons; lines: weights 
-            self.weights = np.random.uniform(-limit, +limit, size=(prev_layer_size, self.layer_size))
+            self.weights = np.zeros(1, self.layer_size)
+            self.biais = np.random.uniform(-limit, +limit, size=(1, self.layer_size))
 
     def forward(self, X):
-        self.z = np.dot(X, self.weights)
+        # z with row = sample and column = z 
+        self.z = np.dot(X, self.weights) + self.biais
         if self.activation == "sigmoid":
-            self.activ_output = 1 / (1 + np.exp(-self.activ_output))
+            self.activ_output = 1 / (1 + np.exp(-self.z))
         if self.activation == "relu":
-            self.activ_output = np.max(0, self.activ_output)
+            self.activ_output = np.maximum(0, self.z)
         if self.activation == "softmax":
-            self.activ_output = np.exp(self.activ_output) / np.sum(np.exp(self.activ_output), axis=1, keepdims=True)
+            self.activ_output = np.exp(self.z) / np.sum(np.exp(self.z), axis=1, keepdims=True)
         return (self.activ_output)
 
-    def update_weights(self, delta, prev_input):
-        gradiant = np.dot(delta, prev_input)
-        self.weights -= gradiant
-        return(gradiant)
+    def update_weights(self, delta, X):
+        # dot because we want to do the sum of all sample
+        gradiant_weights = np.dot(X.T, delta)
+        gradiant_weights = gradiant_weights / delta.shape[0]
+        gradiant_bias = np.sum(delta, axis=0, keepdims=True) 
+        gradiant_bias =  gradiant_bias / delta.shape[0]
+        self.weights -= gradiant_weights
+        self.biais -= gradiant_bias
 
-    def compute_gradiant(self, prev_output, prev_activation):
-        pass
+    def compute_gradiant(self,delta, weights_next, activation_prev):
+        # backprop with row = sample and column = neuron
+        backprop = np.dot(delta, weights_next.T)
+        delta = backprop * self.activ_output * (1 - self.activ_output)
+        self.update_weights(delta, activation_prev)
+        return (delta)
 
     def __len__(self):
         return self.layer_size
+
 class DenseLayer(Layers):
     pass
 
@@ -51,20 +59,19 @@ class Model:
         self.y_train = data_train[1]
         self.X_val = data_val[0]
         self.y_val = data_val[1]
-        self.X_train = np.hstack([np.ones((self.X_train.shape[0], 1)), self.X_train])
         self._initalize_weights()
         z = self._forward_propagation()
         self._backward_propagation(z)
 
     def _initalize_weights(self):
-        prev_layer_size = len(self.X_train)
+        prev_layer_size = len(self.X_train[0])
         for layer in self.network:
             layer.initialize(prev_layer_size)
             prev_layer_size = len(layer)
 
     def _forward_propagation(self):
         z = self.X_train
-        for i in range(network):
+        for i in range(len(self.network)):
             z = self.network[i].forward(z)
         return (z)
 
@@ -72,26 +79,19 @@ class Model:
     def _backward_propagation(self, z):
         end_layer : Layers = self.network[-1]
         second_end = self.network[-2]
-        delta = np(self.y_train - z)
-        gradiant = end_layer.update_weights(delta, second_end.output)
-        for i in range(len(self.network) - 2, 0):
-            if i > 0:
-                prev_output = self.network[i - 1].z
-                prev_activation = self.network[i - 1].activ_output
-            else:
-                prev_output = self.X_train
-                prev_activation = None
-            self.network[i].compute_gradiant(prev_output, prev_activation)
-            pass
-
-        delta = self.y_train * np.log(z)
-        pass
+        delta = z - self.y_train
+        end_layer.update_weights(delta, second_end.activ_output)
+        for i in range(len(self.network) - 2, 0, -1):
+            prev_weights = self.network[i + 1].weights
+            prev_activation = self.network[i - 1].activ_output
+            delta = self.network[i].compute_gradiant(delta, prev_weights, prev_activation)
 
 
 def extract_data(path):
     data = pd.read_csv(path, header=None)
     data[1] = data[1].map({"M":1, "B":0})
     y = data[1].to_numpy()
+    y = np.eye(2)[y]
     X = data.drop(columns=[0, 1]).to_numpy()
     return (X, y)
 
