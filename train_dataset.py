@@ -73,7 +73,7 @@ class Model:
         self.accuracy["train"] = []
         self.accuracy["val"] = []
 
-    def fit(self,  data_train, data_valid, loss="categoricalCrossentropy", learning_rate=0.0314, batch_size=8, epochs=84):
+    def fit(self,  data_train, data_val, loss="categoricalCrossentropy", learning_rate=0.0314, batch_size=8, epochs=84):
         self.X_train = data_train[0]
         self.y_train = data_train[1]
         self.X_val = data_val[0]
@@ -83,18 +83,19 @@ class Model:
         print("Starting Forward...")
         for i in range(0, epochs):
             z = self._forward_propagation(self.X_train)
-            print("Forward finished.")
             self._save_plot_data(i, z)
-            print("Starting backpropagation...")
             self._backward_propagation(z)
-            print("Backpropagation finished.")
+        print(f"validation loss: {self.loss['val'][-1]}")
+        print(f"training loss: {self.loss['train'][-1]}")
+        print(f"validation accuracy: {self.accuracy['val'][-1]}")
+        print(f"training accuracy: {self.accuracy['train'][-1]}")
         self._draw_plot()
         
     def _compute_loss(self, X, y, z):
             loss = -1 / self.X_val.shape[0] * np.sum(y * np.log(z))
             return (loss)
 
-    def _compute_accuracy(self, z, y):
+    def _compute_accuracy(self, y, z):
         y_pred_idx = np.argmax(z, axis=1)
         y_true_idx = np.argmax(y, axis=1)
         return (np.mean(y_true_idx == y_pred_idx))
@@ -144,9 +145,12 @@ class Model:
 
     def _backward_propagation(self, z):
         end_layer : Layers = self.network[-1]
-        second_end = self.network[-2]
+        if len(self.network) < 2:
+            second_end = self.X_train
+        else:
+            second_end = self.network[-2].activ_output
         delta = z - self.y_train
-        end_layer.compute_gradiant(delta, second_end.activ_output)
+        end_layer.compute_gradiant(delta, second_end)
         for i in range(len(self.network) - 2, -1, -1):
             prev_weights = self.network[i + 1].weights
             if i != 0:
@@ -167,9 +171,13 @@ def extract_data(path):
     X = data.drop(columns=[0, 1]).to_numpy()
     return (X, y)
 
-def standardise_data(data):
-    data = (data - np.mean(data, axis=0)) / np.std(data, axis=0)
-    return(data)
+def standardise_data(data, mean=None, std=None):
+    if mean is None:
+        mean = np.mean(data, axis=0)
+    if std is None:
+        std = np.std(data, axis=0)
+    data = (data - mean) / std
+    return(data, mean, std)
 
 
 if __name__ == "__main__":
@@ -177,15 +185,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("train_path")
     parser.add_argument("val_path")
+    parser.add_argument("-l", "--learning-rate")
     args = parser.parse_args()
     data_X, data_y = extract_data(args.train_path)
-    data_val = extract_data(args.val_path)
-    data_X = standardise_data(data_X)
-    network = [DenseLayer(len(data_val[0][0]), "sigmoid", "heUniform" ),
-               DenseLayer(35, "sigmoid", "heUniform" ),
-               DenseLayer(2, "softmax", "heUniform" )]
+    data_val_X, data_val_y = extract_data(args.val_path)
+    data_X, mean, std = standardise_data(data_X)
+    data_val_X, _, _ = standardise_data(data_val_X, mean, std)
+    network = [DenseLayer(2, "softmax", "heUniform" )]
     model = Model(network)
-    model.fit((data_X, data_y), data_val, epochs=200)
+    model.fit((data_X, data_y), (data_val_X, data_val_y), epochs=200, learning_rate=args.learning_rate)
 
 
 
