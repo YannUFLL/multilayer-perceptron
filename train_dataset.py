@@ -39,9 +39,9 @@ class Layers:
         gradiant_bias = np.sum(delta, axis=0, keepdims=True) 
         self.gradiant_bias =  gradiant_bias / delta.shape[0]
 
-    def apply_gradiants(self):
-        self.weights -= self.gradiant_weights
-        self.bias -= self.gradiant_bias
+    def apply_gradiants(self, lr):
+        self.weights -= lr * self.gradiant_weights
+        self.bias -= lr * self.gradiant_bias
 
 
     def compute_layer_error(self,delta, weights_next, activation_prev):
@@ -79,6 +79,7 @@ class Model:
         self.X_val = data_val[0]
         self.y_val = data_val[1]
         self.epochs = epochs 
+        self.lr = learning_rate
         self._initalize_weights()
         print("Starting Forward...")
         for i in range(0, epochs):
@@ -159,7 +160,7 @@ class Model:
                 prev_activation = self.X_train
             delta = self.network[i].compute_layer_error(delta, prev_weights, prev_activation)
         for i in range(0, len(self.network)):
-            network[i].apply_gradiants()
+            network[i].apply_gradiants(self.lr)
 
 
 
@@ -191,9 +192,11 @@ if __name__ == "__main__":
     data_val_X, data_val_y = extract_data(args.val_path)
     data_X, mean, std = standardise_data(data_X)
     data_val_X, _, _ = standardise_data(data_val_X, mean, std)
-    network = [DenseLayer(2, "softmax", "heUniform" )]
+    network = [DenseLayer(40, "relu", "heUniform" ),
+               DenseLayer(40, "relu", "heUniform" ),
+               DenseLayer(2, "softmax", "heUniform" )]
     model = Model(network)
-    model.fit((data_X, data_y), (data_val_X, data_val_y), epochs=200, learning_rate=args.learning_rate)
+    model.fit((data_X, data_y), (data_val_X, data_val_y), epochs=200, learning_rate=float(args.learning_rate))
 
 
 
