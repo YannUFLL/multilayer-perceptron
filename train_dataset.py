@@ -54,6 +54,10 @@ class Layers:
         self.compute_gradiant(delta, activation_prev)
         return (delta)
 
+    def print_stats(self):
+        print(f"mean weights: {np.mean(self.weights)}")
+        print(f"mean std: {np.std(self.weights)}")
+
     def __len__(self):
         return self.layer_size
 
@@ -61,7 +65,7 @@ class DenseLayer(Layers):
     pass
 
 class Model: 
-    def __init__(self, network):
+    def __init__(self, network, plot_dead):
         self.network : list[Layers] = network
         self.iters = {}
         self.loss = {}
@@ -72,6 +76,7 @@ class Model:
         self.loss["val"] = []
         self.accuracy["train"] = []
         self.accuracy["val"] = []
+        self.plot_dead = plot_dead
 
     def fit(self,  data_train, data_val, loss="categoricalCrossentropy", learning_rate=0.0314, batch_size=8, epochs=84):
         self.X_train = data_train[0]
@@ -90,8 +95,13 @@ class Model:
         print(f"training loss: {self.loss['train'][-1]}")
         print(f"validation accuracy: {self.accuracy['val'][-1]}")
         print(f"training accuracy: {self.accuracy['train'][-1]}")
+        for i in range(0, len(self.network)):
+            print()
+            print(f"Layer stats {i}: ")
+            self.network[i].print_stats()
+
         self._draw_plot()
-        
+
     def _compute_loss(self, X, y, z):
             loss = -1 / self.X_val.shape[0] * np.sum(y * np.log(z))
             return (loss)
@@ -116,6 +126,8 @@ class Model:
         ax2.plot(self.iters["val"], self.accuracy["val"], label="validation data", color="orange", linestyle="--")
         ax2.legend(loc="upper right")
         fig.tight_layout()
+        if (self.plot_dead):
+            pass
         plt.show(block=True)
 
     def _save_plot_data(self, i, z):
@@ -141,6 +153,7 @@ class Model:
         z =  X
         for i in range(len(self.network)):
             z = self.network[i].forward(z, should_save)
+            print(z.shape)
         return (z)
 
 
@@ -187,16 +200,18 @@ if __name__ == "__main__":
     parser.add_argument("train_path")
     parser.add_argument("val_path")
     parser.add_argument("-l", "--learning-rate")
+    parser.add_argument("-e", "--epochs")
+    parser.add_argument("-d", "--plot-dead", action="store_true")
     args = parser.parse_args()
     data_X, data_y = extract_data(args.train_path)
     data_val_X, data_val_y = extract_data(args.val_path)
     data_X, mean, std = standardise_data(data_X)
     data_val_X, _, _ = standardise_data(data_val_X, mean, std)
-    network = [DenseLayer(40, "relu", "heUniform" ),
-               DenseLayer(40, "relu", "heUniform" ),
+    network = [DenseLayer(200, "relu", "heUniform" ),
+               DenseLayer(200, "relu", "heUniform" ),
                DenseLayer(2, "softmax", "heUniform" )]
-    model = Model(network)
-    model.fit((data_X, data_y), (data_val_X, data_val_y), epochs=200, learning_rate=float(args.learning_rate))
+    model = Model(network, args.plot_dead)
+    model.fit((data_X, data_y), (data_val_X, data_val_y), epochs=int(args.epochs), learning_rate=float(args.learning_rate))
 
 
 
