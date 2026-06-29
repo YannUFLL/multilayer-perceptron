@@ -190,7 +190,14 @@ class Model:
         for i in range(0, len(self.network)):
             network[i].apply_gradiants(self.lr)
 
-
+    def _save_weights(self):
+        model_state = {}
+        for i, layer in enumerate(self.network):
+            model_state[f"w_{i}"] = layer.weights
+            model_state[f"b_{i}"] = layer.bias
+            model_state[f"a_{i}"] = layer.activation
+        np.savez_compressed("model.pkl", **model_state)
+        
 
 def extract_data(path):
     data = pd.read_csv(path, header=None)
