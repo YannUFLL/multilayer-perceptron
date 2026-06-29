@@ -17,10 +17,15 @@ class Layers:
             self.bias = np.zeros((1, self.layer_size))
             self.weights = np.random.uniform(-limit, +limit, size=(prev_layer_size, self.layer_size))
 
-    def forward(self, X, should_save):
+    def forward(self, X, should_save, count_dead_neurons ):
         # z with row = sample and column = z 
         
         z = np.dot(X, self.weights) + self.bias
+        ratio_dead_neurons = None
+        if count_dead_neurons and self.activation == "relu":
+            dead_neurons = np.all(z <= 0, axis=0)
+            total_dead_neurons = np.sum(dead_neurons)
+            ratio_dead_neurons = total_dead_neurons / self.layer_size
         if self.activation == "sigmoid":
             activ_output = 1 / (1 + np.exp(-z))
         if self.activation == "relu":
@@ -30,7 +35,7 @@ class Layers:
         if should_save:
             self.activ_output = activ_output
             self.z = z
-        return (activ_output)
+        return (activ_output, ratio_dead_neurons)
 
     def compute_gradiant(self, delta, X):
         # dot because we want to do the sum of all sample
@@ -55,8 +60,8 @@ class Layers:
         return (delta)
 
     def print_stats(self):
-        print(f"mean weights: {np.mean(self.weights)}")
-        print(f"mean std: {np.std(self.weights)}")
+        print(f"mean weights: {np.mean(self.weights):.4f}")
+        print(f"mean std: {np.std(self.weights):.4f}")
 
     def __len__(self):
         return self.layer_size
@@ -65,7 +70,7 @@ class DenseLayer(Layers):
     pass
 
 class Model: 
-    def __init__(self, network, plot_dead):
+    def __init__(self, network, plot_dead, print_stats):
         self.network : list[Layers] = network
         self.iters = {}
         self.loss = {}
@@ -77,8 +82,10 @@ class Model:
         self.accuracy["train"] = []
         self.accuracy["val"] = []
         self.plot_dead = plot_dead
+        self.dead_neurons_history = {i: [] for i, layer in enumerate(self.network) if layer.activation == "relu"}
+        self.print_stats = print_stats
 
-    def fit(self,  data_train, data_val, loss="categoricalCrossentropy", learning_rate=0.0314, batch_size=8, epochs=84):
+    def fit(self,  data_train, data_val, learning_rate, batch_size, epochs, loss="categoricalCrossentropy"):
         self.X_train = data_train[0]
         self.y_train = data_train[1]
         self.X_val = data_val[0]
@@ -86,19 +93,15 @@ class Model:
         self.epochs = epochs 
         self.lr = learning_rate
         self._initalize_weights()
-        print("Starting Forward...")
         for i in range(0, epochs):
-            z = self._forward_propagation(self.X_train)
+            z = self._forward_propagation(self.X_train, True, self.plot_dead)
             self._save_plot_data(i, z)
             self._backward_propagation(z)
-        print(f"validation loss: {self.loss['val'][-1]}")
-        print(f"training loss: {self.loss['train'][-1]}")
-        print(f"validation accuracy: {self.accuracy['val'][-1]}")
-        print(f"training accuracy: {self.accuracy['train'][-1]}")
-        for i in range(0, len(self.network)):
-            print()
-            print(f"Layer stats {i}: ")
-            self.network[i].print_stats()
+        if self.print_stats:
+           for i in range(0, len(self.network)):
+                print()
+                print(f"Layer stats {i}: ")
+                self.network[i].print_stats()
 
         self._draw_plot()
 
@@ -112,7 +115,9 @@ class Model:
         return (np.mean(y_true_idx == y_pred_idx))
 
     def _draw_plot(self):
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+        nb_cols = 3 if self.plot_dead else 2
+        fig, axes = plt.subplots(1, nb_cols, figsize=(7 * nb_cols, 6))
+        ax1, ax2 = axes[0], axes[1]
         ax1.set_xlabel("Epochs")
         ax1.set_ylabel("Loss")
         ax1.set_title("Cost function progression during training")
@@ -127,7 +132,15 @@ class Model:
         ax2.legend(loc="upper right")
         fig.tight_layout()
         if (self.plot_dead):
-            pass
+            ax3 = axes[2]
+            ax3.set_xlabel("Epochs")
+            ax3.set_ylabel("Dead Neurons Ratio")
+            ax3.set_title("Dead ReLU progression (ratio)")
+            ax3.set_ylim(0.0, 0.01)
+            for idx, history in self.dead_neurons_history.items():
+                if history is not None:
+                    ax3.plot(self.iters["train"], history, label=f"Layer: {idx}")
+            ax3.legend(loc="upper right")
         plt.show(block=True)
 
     def _save_plot_data(self, i, z):
@@ -136,6 +149,7 @@ class Model:
         val_loss = self._compute_loss(self.X_val, self.y_val, z_val)
         train_acc = self._compute_accuracy(self.y_train, z)
         val_acc = self._compute_accuracy(self.y_val, z_val)
+        print(f"epoch {i + 1}/{self.epochs} - loss: {train_loss:.5f} - val_loss: {val_loss:.5f} - accuracy: {train_acc:.5f} - val_accuracy: {val_acc:.5f}")
         self.loss["train"].append(train_loss)
         self.loss["val"].append(val_loss)
         self.iters["train"].append(i)
@@ -149,11 +163,12 @@ class Model:
             layer.initialize(prev_layer_size)
             prev_layer_size = len(layer)
 
-    def _forward_propagation(self, X, should_save=True):
+    def _forward_propagation(self, X, should_save=True, should_save_dead_neurons=False):
         z =  X
         for i in range(len(self.network)):
-            z = self.network[i].forward(z, should_save)
-            print(z.shape)
+            z,dead_neurons_ratio = self.network[i].forward(z, should_save, should_save_dead_neurons)
+            if should_save_dead_neurons and i in self.dead_neurons_history:
+                self.dead_neurons_history[i].append(dead_neurons_ratio)
         return (z)
 
 
@@ -199,10 +214,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("train_path")
     parser.add_argument("val_path")
-    parser.add_argument("-l", "--learning-rate")
-    parser.add_argument("-e", "--epochs")
+    parser.add_argument("-l", "--learning-rate", type=float, default=0.0314)
+    parser.add_argument("-e", "--epochs", type=int, default=100)
     parser.add_argument("-d", "--plot-dead", action="store_true")
+    parser.add_argument("-s", "--stats", action="store_true", default=False)
+    parser.add_argument("-rs", "--random-seed",type=int,  default=None)
     args = parser.parse_args()
+    if args.random_seed != None:
+        np.random.seed(args.random_seed)
     data_X, data_y = extract_data(args.train_path)
     data_val_X, data_val_y = extract_data(args.val_path)
     data_X, mean, std = standardise_data(data_X)
@@ -210,8 +229,12 @@ if __name__ == "__main__":
     network = [DenseLayer(200, "relu", "heUniform" ),
                DenseLayer(200, "relu", "heUniform" ),
                DenseLayer(2, "softmax", "heUniform" )]
-    model = Model(network, args.plot_dead)
-    model.fit((data_X, data_y), (data_val_X, data_val_y), epochs=int(args.epochs), learning_rate=float(args.learning_rate))
+    model = Model(network, args.plot_dead, args.stats)
+    model.fit((data_X, data_y), 
+              (data_val_X, data_val_y), 
+              epochs=args.epochs if args.epochs is not None else None,
+              batch_size=0,
+              learning_rate=args.learning_rate)
 
 
 
