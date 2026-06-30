@@ -102,8 +102,8 @@ class Model:
                 print()
                 print(f"Layer stats {i}: ")
                 self.network[i].print_stats()
-
         self._draw_plot()
+        self._save_weights()
 
     def _compute_loss(self, X, y, z):
             loss = -1 / self.X_val.shape[0] * np.sum(y * np.log(z))
@@ -215,9 +215,7 @@ def standardise_data(data, mean=None, std=None):
     data = (data - mean) / std
     return(data, mean, std)
 
-
-if __name__ == "__main__":
-    
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("train_path")
     parser.add_argument("val_path")
@@ -243,6 +241,11 @@ if __name__ == "__main__":
               batch_size=0,
               learning_rate=args.learning_rate)
 
+
+if __name__ == "__main__":
+    main()
+    
+  
 
 
 

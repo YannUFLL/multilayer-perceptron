@@ -2,8 +2,7 @@ import argparse
 
 import pandas
 
-
-if __name__ == "__main__": 
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("dataset")
     arg = parser.parse_args()
@@ -12,5 +11,9 @@ if __name__ == "__main__":
     val_df = df.drop(train_df.index)
     train_df.to_csv("train_dataset.csv", index=False)
     val_df.to_csv("val_dataset.csv", index=False)
+
+if __name__ == "__main__": 
+    main()
+
 
 
