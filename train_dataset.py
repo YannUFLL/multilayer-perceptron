@@ -3,6 +3,7 @@ import pandas as pd
 import argparse
 from matplotlib import pyplot as plt
 
+FILE_PATH = "model"
 class Layers:
     def __init__(self, layer_size, activation="sigmoid", weight_initializer="heUniform"):
         self.layer_size = layer_size
@@ -103,7 +104,6 @@ class Model:
                 print(f"Layer stats {i}: ")
                 self.network[i].print_stats()
         self._draw_plot()
-        self._save_weights()
 
     def _compute_loss(self, X, y, z):
             loss = -1 / self.X_val.shape[0] * np.sum(y * np.log(z))
@@ -188,15 +188,17 @@ class Model:
                 prev_activation = self.X_train
             delta = self.network[i].compute_layer_error(delta, prev_weights, prev_activation)
         for i in range(0, len(self.network)):
-            network[i].apply_gradiants(self.lr)
+            self.network[i].apply_gradiants(self.lr)
 
-    def _save_weights(self):
+    def save_weights(self, mean, std):
         model_state = {}
         for i, layer in enumerate(self.network):
             model_state[f"w_{i}"] = layer.weights
             model_state[f"b_{i}"] = layer.bias
             model_state[f"a_{i}"] = layer.activation
-        np.savez_compressed("model.pkl", **model_state)
+            model_state["mean"] = mean
+            model_state["std"] = std
+        np.savez_compressed(FILE_PATH, **model_state)
         
 
 def extract_data(path):
@@ -240,6 +242,7 @@ def main():
               epochs=args.epochs if args.epochs is not None else None,
               batch_size=0,
               learning_rate=args.learning_rate)
+    model.save_weights(mean, std)
 
 
 if __name__ == "__main__":
